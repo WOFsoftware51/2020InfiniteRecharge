@@ -10,6 +10,8 @@ package frc.robot;
 import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.DemandType;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
+import com.ctre.phoenix.motorcontrol.SupplyCurrentLimitConfiguration;
+import com.ctre.phoenix.motorcontrol.can.TalonFX;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
 
@@ -31,27 +33,30 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  * project.
  */
 public class Robot extends TimedRobot {
-  private static final String kDefaultAuto = "Default";
-  private static final String kCustomAuto = "My Auto";
-  private String m_autoSelected;
-  private final SendableChooser<String> m_chooser = new SendableChooser<>();
-	// Color Sensor
-	Spark spark = new Spark(0);
-	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
+ 	private static final String kDefaultAuto = "Default";
+  	private static final String kCustomAuto = "My Auto";
+  	private String m_autoSelected;
+  	private final SendableChooser<String> m_chooser = new SendableChooser<>();
+
 
 	/** Hardware, either Talon could be a Victor */
 	TalonSRX _turret = new TalonSRX(3);
-	TalonSRX _rightMaster = new TalonSRX(1);
-//	TalonSRX _rightSlave = new TalonSRX(6);
-	TalonSRX _leftMaster = new TalonSRX(10);
-//	TalonFX _LeftMaster = new TalonFX(5);
-	//AHRS ahrs;
-	
+//	TalonSRX _rightMaster = new TalonSRX(1);
+//	TalonSRX _leftMaster = new TalonSRX(10);
+	//Falcon Drive
+	TalonFX _rightMaster = new TalonFX(23);
+	TalonFX _rightSlave = new TalonFX(24);
+	TalonFX _leftMaster = new TalonFX(21);
+	TalonFX _leftSlave = new TalonFX(22);
+
+	Spark spark = new Spark(0);
+	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
 
 	Boolean Aim = false;
+	Boolean practiceBot = false;
 	Boolean ManAim = false;
-  Boolean AimGO = true;
-  Boolean CenterTurret = true;
+	Boolean AimGO = true;
+	Boolean CenterTurret = true;
 	Joystick _gamepad = new Joystick(1);
 	XboxController _xbox = new XboxController(0);
 	double tv = 0;
@@ -66,10 +71,14 @@ public class Robot extends TimedRobot {
 	double turn = 0;
 	double range = 500;
 	double gyro = 0;
+	double roll = 0;
 	double gyroF = 0;
 	//Range of motion for turret in either direction
-  int distanceTurret;
-  int distanceDrive;
+	int distanceTurret;
+	int distanceDrive;
+	SupplyCurrentLimitConfiguration falcon = new SupplyCurrentLimitConfiguration(true, 60, 60, 0.001);
+
+	
 
   
   PIDController AimPID= new PIDController(kP, kI, kD);
@@ -88,9 +97,13 @@ public class Robot extends TimedRobot {
 		/* Ensure motor output is neutral during init */
 		_leftMaster.set(ControlMode.PercentOutput, 0);
 		_rightMaster.set(ControlMode.PercentOutput, 0);
+		_rightMaster.configSupplyCurrentLimit(falcon);
+		_leftMaster.configSupplyCurrentLimit(falcon);
+		_rightSlave.configSupplyCurrentLimit(falcon);
+		_leftSlave.configSupplyCurrentLimit(falcon);
 		_turret.set(ControlMode.PercentOutput, 0);
-		//_leftSlave.follow(_leftMaster);
-		//_rightSlave.follow(_rightMaster);
+		_leftSlave.follow(_leftMaster);
+		_rightSlave.follow(_rightMaster);
 
 		/* Factory Default all hardware to prevent unexpected behaviour */
 		_leftMaster.configFactoryDefault();
@@ -101,16 +114,17 @@ public class Robot extends TimedRobot {
 		_leftMaster.setNeutralMode(NeutralMode.Coast);
 		_rightMaster.setNeutralMode(NeutralMode.Coast);
 		_turret.setNeutralMode(NeutralMode.Coast);
-		//_leftSlave.setNeutralMode(NeutralMode.Coast);
-		//_rightSlave.setNeutralMode(NeutralMode.Coast);
+		_leftSlave.setNeutralMode(NeutralMode.Coast);
+		_rightSlave.setNeutralMode(NeutralMode.Coast);
 		
 		/* Configure output direction */
 		_leftMaster.setInverted(false);
 		_rightMaster.setInverted(true);
+		_rightSlave.setInverted(true);
+		_leftSlave.setInverted(false);
 		_turret.setInverted(false);
-    _turret.setSelectedSensorPosition(0);
-    _rightMaster.setSelectedSensorPosition(0);
-		//ahrs = new AHRS(SerialPort.Port.kMXP); /* Alternatives:  SPI.Port.kMXP, I2C.Port.kMXP or SerialPort.Port.kUSB */
+    	_turret.setSelectedSensorPosition(0);
+    	_rightMaster.setSelectedSensorPosition(0);
 		ahrs.zeroYaw();
 		
 
@@ -131,7 +145,8 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("distanceTurret", distanceTurret);
     SmartDashboard.putNumber("Gyro", gyro);
   	SmartDashboard.putNumber("distanceDrive", distanceDrive);
-		SmartDashboard.putNumber("Gyro Fused", gyroF);
+	SmartDashboard.putNumber("Gyro Fused", gyroF);
+	SmartDashboard.putNumber("Roll", roll);
   }
 
   /**
@@ -193,7 +208,7 @@ public class Robot extends TimedRobot {
 
 		/* Gamepad processing */
 		//double forward = -1 * _gamepad.getY();
-    //double turn = -_gamepad.getTwist();	
+   		//double turn = -_gamepad.getTwist();	
     
 		forward = -1 *_xbox.getY(Hand.kLeft);
 		turn = -_xbox.getX(Hand.kRight);		
@@ -203,11 +218,12 @@ public class Robot extends TimedRobot {
 		ManAim = _xbox.getBumper(Hand.kLeft);
 		AimGO = _xbox.getBumperPressed(Hand.kRight);
 		gyro = ahrs.getYaw();
-    gyroF = ahrs.getFusedHeading();
-    CenterTurret = _xbox.getYButton();
+		gyroF = ahrs.getFusedHeading();
+		roll = ahrs.getRoll();
+    	CenterTurret = _xbox.getYButton();
 
-    distanceTurret = _turret.getSelectedSensorPosition();
-    distanceDrive = _rightMaster.getSelectedSensorPosition();
+    	distanceTurret = _turret.getSelectedSensorPosition();
+    	distanceDrive = _rightMaster.getSelectedSensorPosition();
 
 		_turret.getSelectedSensorVelocity();
 
@@ -308,7 +324,7 @@ public class Robot extends TimedRobot {
 
 		/* Arcade Drive using PercentOutput along with Arbitrary Feed Forward supplied by turn */
 		_leftMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, +turn);
-    _rightMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, -turn); 
+    	_rightMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, -turn); 
   }
   double Deadband(final double value) 
 	{
