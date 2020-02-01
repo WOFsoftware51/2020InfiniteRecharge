@@ -11,6 +11,7 @@ import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.DemandType;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.SupplyCurrentLimitConfiguration;
+import com.ctre.phoenix.motorcontrol.TalonSRXFeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.TalonFX;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
@@ -32,15 +33,17 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  * creating this project, you must also update the build.gradle file in the
  * project.
  */
-public class Robot extends TimedRobot {
- 	private static final String kDefaultAuto = "Default";
-  	private static final String kCustomAuto = "My Auto";
-  	private String m_autoSelected;
-  	private final SendableChooser<String> m_chooser = new SendableChooser<>();
-
+public class Robot extends TimedRobot 
+{
+	private static final String kDefaultAuto = "Default";
+	private static final String kCustomAuto = "My Auto";
+	private static final String kTest = "Test";
+	private static final String kSpin = "Spin";
+	private String m_autoSelected;
+	private final SendableChooser<String> m_chooser = new SendableChooser<>();
 
 	/** Hardware, either Talon could be a Victor */
-	TalonSRX _turret = new TalonSRX(3);
+
 //	TalonSRX _rightMaster = new TalonSRX(1);
 //	TalonSRX _leftMaster = new TalonSRX(10);
 	//Falcon Drive
@@ -48,18 +51,28 @@ public class Robot extends TimedRobot {
 	TalonFX _rightSlave = new TalonFX(24);
 	TalonFX _leftMaster = new TalonFX(21);
 	TalonFX _leftSlave = new TalonFX(22);
+	TalonSRX _turret = new TalonSRX(3);
+	TalonSRX _intake = new TalonSRX(7);
+	TalonSRX _dogbone = new TalonSRX(8);
+	TalonSRX _shooterMaster = new TalonSRX(6);
+	TalonSRX _shooterSlave = new TalonSRX(5);
 
-	Spark spark = new Spark(0);
+	Spark Blinkin = new Spark(0);
 	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
 
 	Boolean Aim = false;
-	Boolean practiceBot = false;
+	Boolean Shoot = false;
+	Boolean lockedOn = false;
 	Boolean ManAim = false;
 	Boolean AimGO = true;
 	Boolean CenterTurret = true;
+	Boolean Start = false;
+	Boolean teleopInit = true;
 	Joystick _gamepad = new Joystick(1);
-	XboxController _xbox = new XboxController(0);
+	XboxController _xboxDriver = new XboxController(0);
+	XboxController _xboxOp = new XboxController(1);
 	double tv = 0;
+	double Potentiometer = 0;
 	//tv : Whether the limelight has any valid targets (0 or 1)
 	double tx = 0;
 	//tx : Horizontal Offset From Crosshair To Target (LL1: -27 degrees to 27 degrees | LL2: -29.8 to 29.8 degrees)
@@ -73,6 +86,8 @@ public class Robot extends TimedRobot {
 	double gyro = 0;
 	double roll = 0;
 	double gyroF = 0;
+	double speedShooter = 0;
+
 	//Range of motion for turret in either direction
 	int distanceTurret;
 	int distanceDrive;
@@ -90,9 +105,8 @@ public class Robot extends TimedRobot {
   @Override
   public void robotInit() 
   {
-    m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
-    m_chooser.addOption("My Auto", kCustomAuto);
-    SmartDashboard.putData("Auto choices", m_chooser);
+   
+
 
 		/* Ensure motor output is neutral during init */
 		_leftMaster.set(ControlMode.PercentOutput, 0);
@@ -101,35 +115,36 @@ public class Robot extends TimedRobot {
 		_leftMaster.configSupplyCurrentLimit(falcon);
 		_rightSlave.configSupplyCurrentLimit(falcon);
 		_leftSlave.configSupplyCurrentLimit(falcon);
+		_shooterMaster.set(ControlMode.PercentOutput, 0);
 		_turret.set(ControlMode.PercentOutput, 0);
 		_leftSlave.follow(_leftMaster);
 		_rightSlave.follow(_rightMaster);
+		_shooterSlave.follow(_shooterMaster);
 
 		/* Factory Default all hardware to prevent unexpected behaviour */
 		_leftMaster.configFactoryDefault();
 		_rightMaster.configFactoryDefault();
 		_turret.configFactoryDefault();
+		_shooterMaster.configFactoryDefault();
+		_shooterSlave.configFactoryDefault();
 		
 		/* Set Neutral mode */
-		_leftMaster.setNeutralMode(NeutralMode.Coast);
-		_rightMaster.setNeutralMode(NeutralMode.Coast);
-		_turret.setNeutralMode(NeutralMode.Coast);
-		_leftSlave.setNeutralMode(NeutralMode.Coast);
-		_rightSlave.setNeutralMode(NeutralMode.Coast);
 		
+		_shooterSlave.setNeutralMode(NeutralMode.Coast);
+		_shooterMaster.setNeutralMode(NeutralMode.Coast);
+		_turret.setNeutralMode(NeutralMode.Coast);
 		/* Configure output direction */
 		_leftMaster.setInverted(false);
 		_rightMaster.setInverted(true);
 		_rightSlave.setInverted(true);
 		_leftSlave.setInverted(false);
 		_turret.setInverted(false);
+		_shooterMaster.setInverted(false);
     	_turret.setSelectedSensorPosition(0);
-    	_rightMaster.setSelectedSensorPosition(0);
+		_rightMaster.setSelectedSensorPosition(0);
+		_shooterMaster.setSelectedSensorPosition(0);
+		_dogbone.configSelectedFeedbackSensor(TalonSRXFeedbackDevice.Analog,0,0);
 		ahrs.zeroYaw();
-		
-
-		
-		System.out.println("This is Arcade Drive using Arbitrary Feed Forward.");
   }
 
   /**
@@ -141,12 +156,137 @@ public class Robot extends TimedRobot {
    * LiveWindow and SmartDashboard integrated updating.
    */
   @Override
-  public void robotPeriodic() {
+  public void robotPeriodic() 
+  {
     SmartDashboard.putNumber("distanceTurret", distanceTurret);
     SmartDashboard.putNumber("Gyro", gyro);
   	SmartDashboard.putNumber("distanceDrive", distanceDrive);
 	SmartDashboard.putNumber("Gyro Fused", gyroF);
 	SmartDashboard.putNumber("Roll", roll);
+	SmartDashboard.putNumber("Drive", forward);
+	SmartDashboard.putData("Auto choices", m_chooser);
+	SmartDashboard.putBoolean("AIM", Aim);
+	SmartDashboard.putNumber("turret", turretAim);
+	SmartDashboard.putNumber("Shooter Speed", speedShooter);
+	SmartDashboard.putNumber("Pot", Potentiometer);
+	m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
+	m_chooser.addOption("My Auto", kCustomAuto);
+	m_chooser.addOption("Test", kTest);
+	m_chooser.addOption("Spin", kSpin);
+	gyro = ahrs.getYaw();
+	gyroF = ahrs.getFusedHeading();
+	roll = ahrs.getRoll();
+	distanceTurret = _turret.getSelectedSensorPosition();
+	distanceDrive = _rightMaster.getSelectedSensorPosition();
+	speedShooter = _shooterMaster.getSelectedSensorVelocity();
+	Potentiometer = _dogbone.getSelectedSensorPosition();
+	//Green = 0.77
+	//Red = 0.61
+	//Purple = 0.03
+
+	if(Aim)
+	{
+		if(tx>-1.5 && tx<1.5 && tv == 1)
+		{
+			Blinkin.set(0.77);
+			lockedOn = true;
+		}
+		else
+		{
+			Blinkin.set(0.61);
+			lockedOn = false;
+		}
+		
+		NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
+	}
+
+	else 
+	{
+		Blinkin.set(0.03);
+		NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+	}
+
+	tv = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tv").getDouble(0);
+	tx = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0);
+
+	if( Aim)
+	{
+		if(tv==1)
+		{
+			//turretAim =tx;
+			turretAim = AimPID.calculate(tx, 0);
+		}
+		else
+		{
+			if(distanceTurret>range-100)
+			{
+				turretAim = 0.3;
+			}
+			else if(distanceTurret<(range*-1)+100)
+			{
+				turretAim = -0.3;
+			}
+			else if (AimGO)
+			{
+				turretAim = 0.3;
+				AimGO = false;
+			}
+			
+		}
+				
+	}
+	else if(ManAim)
+	{
+		turretAim =_xboxDriver.getX(Hand.kLeft)*0.2;
+	}
+	else if(CenterTurret)
+	{
+ 	 turretAim = AimPID.calculate((-distanceTurret/10), 0);
+	}
+	else
+	{
+		turretAim = 0;
+	}
+
+	if(distanceTurret<-range && turretAim>0)
+	{
+		turretAim=0;
+	}
+	else if (distanceTurret>range && turretAim<0)
+	{
+		turretAim=0;
+	}
+	else
+	{
+		if(turretAim>0.6)
+		{
+			turretAim=0.6;
+		}
+		else if(turretAim<-0.6)
+		{
+			turretAim=-0.6;
+		}
+	}
+	_turret.set(ControlMode.PercentOutput, turretAim);
+	
+	//Shoot ball 
+
+	if (Shoot) //add lockedOn && Aim && 
+	{
+		_shooterMaster.set(ControlMode.PercentOutput, 0.5);
+	}
+
+
+
+
+
+	if(forward<0.3 && forward>-0.3)
+	{
+		turn = turn/2;
+	}
+	/* Arcade Drive using PercentOutput along with Arbitrary Feed Forward supplied by turn */
+	_leftMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, -turn);
+	_rightMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, turn); 
   }
 
   /**
@@ -161,27 +301,69 @@ public class Robot extends TimedRobot {
    * SendableChooser make sure to add them to the chooser code above as well.
    */
   @Override
-  public void autonomousInit() {
+  public void autonomousInit() 
+  {
     m_autoSelected = m_chooser.getSelected();
-    m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
-
+    // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
     System.out.println("Auto selected: " + m_autoSelected);
+	System.out.println("Auto selected: " + m_autoSelected);
+
+	_leftMaster.setNeutralMode(NeutralMode.Brake);
+	_rightMaster.setNeutralMode(NeutralMode.Brake);
+	_leftSlave.setNeutralMode(NeutralMode.Brake);
+	_rightSlave.setNeutralMode(NeutralMode.Brake);
   }
 
   /**
    * This function is called periodically during autonomous.
    */
   @Override
-  public void autonomousPeriodic() {
-    switch (m_autoSelected) {
-      case kCustomAuto:
-        // Put custom auto code here
-        break;
-      case kDefaultAuto:
-      default:
-        // Put default auto code here
-        break;
-    }
+  public void autonomousPeriodic()
+  {
+	switch (m_autoSelected) 
+	{
+		case kCustomAuto:
+		  // Put custom auto code here
+		  break;
+		  
+		case kTest:
+		  // Put custom auto code here
+		  autoReset();
+		  while(Start == false)
+		  {
+			Start = autoStartDrive();			  
+		  }
+		  while(distanceDrive<2000 || distanceDrive>-2000)
+		  {
+			_rightMaster.set(ControlMode.PercentOutput, 0.51);
+			_leftMaster.set(ControlMode.PercentOutput, 0.51);
+		  }
+		  autoReset();
+
+		  break;
+
+		case kDefaultAuto:
+		default:
+		  // Put default auto code here
+		  autoReset();
+		  break;
+
+		case kSpin: 
+		autoReset();
+		while(Start == false)
+		{
+			Start = autoStartDrive();	
+		}
+		while(gyro<85)
+		{
+			_rightMaster.set(ControlMode.PercentOutput, -0.51);
+			_leftMaster.set(ControlMode.PercentOutput, 0.51);	
+		}
+		autoReset();
+		break;
+				
+	}
+
   }
 
   /**
@@ -205,127 +387,34 @@ public class Robot extends TimedRobot {
      * Run the color match algorithm on our detected color
 
      */
-
 		/* Gamepad processing */
 		//double forward = -1 * _gamepad.getY();
-   		//double turn = -_gamepad.getTwist();	
+		   //double turn = -_gamepad.getTwist();	
+		if(teleopInit)
+		{
+			autoReset();
+			_leftMaster.setNeutralMode(NeutralMode.Coast);
+			_rightMaster.setNeutralMode(NeutralMode.Coast);
+			_leftSlave.setNeutralMode(NeutralMode.Coast);
+			_rightSlave.setNeutralMode(NeutralMode.Coast);
+			teleopInit = false;
+		}
     
-		forward = -1 *_xbox.getY(Hand.kLeft);
-		turn = -_xbox.getX(Hand.kRight);		
+		forward = -1 *_xboxDriver.getY(Hand.kLeft);
+		turn = -_xboxDriver.getX(Hand.kRight);		
 		forward = Deadband(forward);
 		turn = Deadband(turn);
-		Aim = _xbox.getBumper(Hand.kRight);
-		ManAim = _xbox.getBumper(Hand.kLeft);
-		AimGO = _xbox.getBumperPressed(Hand.kRight);
-		gyro = ahrs.getYaw();
-		gyroF = ahrs.getFusedHeading();
-		roll = ahrs.getRoll();
-    	CenterTurret = _xbox.getYButton();
+		Shoot = _xboxOp.getBumper(Hand.kRight);
+		Aim = _xboxOp.getBumper(Hand.kRight);
+		ManAim = _xboxOp.getBumper(Hand.kLeft);
+		AimGO = _xboxOp.getBumperPressed(Hand.kRight);
+		CenterTurret = _xboxOp.getYButton();
+		_intake.set(ControlMode.PercentOutput, _xboxOp.getY(Hand.kLeft));
+		_dogbone.set(ControlMode.PercentOutput, _xboxOp.getY(Hand.kRight));
 
-    	distanceTurret = _turret.getSelectedSensorPosition();
-    	distanceDrive = _rightMaster.getSelectedSensorPosition();
-
-		_turret.getSelectedSensorVelocity();
-
-		if(Aim)
-		{
-			if(tx>-1.5 && tx<1.5 && tv == 1)
-			{
-				spark.set(0.77);
-			}
-			else
-			{
-				spark.set(0.61);
-			}
-			
-			NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
-		}
-
-		else 
-		{
-			spark.set(0.03);
-			NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
-		}
-
-		tv = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tv").getDouble(0);
-		tx = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0);
-
-		SmartDashboard.putBoolean("AIM", Aim);
-		if( Aim)
-		{
-			if(tv==1)
-			{
-				//turretAim =tx;
-				turretAim = AimPID.calculate(tx, 0);
-			}
-			else
-			{
-				if(distanceTurret>range-100)
-				{
-					turretAim = 0.3;
-				}
-				else if(distanceTurret<(range*-1)+100)
-				{
-					turretAim = -0.3;
-				}
-				else if (AimGO)
-				{
-					turretAim = 0.3;
-					AimGO = false;
-				}
-				
-			}
-					
-		}
-		else if(ManAim)
-		{
-			turretAim =_xbox.getX(Hand.kLeft)*0.2;
-    }
-    else if(CenterTurret)
-    {
-      turretAim = AimPID.calculate((-distanceTurret/10), 0);
-    }
-		else
-		{
-			turretAim = 0;
-		}
-
-		SmartDashboard.putNumber("turretRAW", turretAim);
-
-
-		if(distanceTurret<-range && turretAim>0)
-		{
-			turretAim=0;
-		}
-		else if (distanceTurret>range && turretAim<0)
-		{
-			turretAim=0;
-		}
-		else
-		{
-			if(turretAim>0.6)
-			{
-				turretAim=0.6;
-			}
-			else if(turretAim<-0.6)
-			{
-				turretAim=-0.6;
-			}
-		}
-		_turret.set(ControlMode.PercentOutput, turretAim);
-		SmartDashboard.putNumber("turret", turretAim);
-
-
-
-		if(forward<0.3 && forward>-0.3)
-		{
-			turn = turn/2;
-		}
-
-		/* Arcade Drive using PercentOutput along with Arbitrary Feed Forward supplied by turn */
-		_leftMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, +turn);
-    	_rightMaster.set(ControlMode.PercentOutput, forward, DemandType.ArbitraryFeedForward, -turn); 
+ 
   }
+  
   double Deadband(final double value) 
 	{
 		/* Upper deadband */
@@ -335,4 +424,24 @@ public class Robot extends TimedRobot {
 		/* Outside deadband */
 		return 0;
 	}
+  boolean autoStartDrive()
+  {
+		while(distanceDrive<100 && distanceDrive>-100)
+		{
+		  _rightMaster.set(ControlMode.PercentOutput, 0.3);
+		  _leftMaster.set(ControlMode.PercentOutput, 0.3);
+		}
+
+		  return true;
+  }
+  void autoReset()
+  {
+	_rightMaster.set(ControlMode.PercentOutput, 0);
+	_leftMaster.set(ControlMode.PercentOutput, 0);
+	_turret.set(ControlMode.PercentOutput, 0);
+	_intake.set(ControlMode.PercentOutput, 0);
+	teleopInit = true;
+
+  }
+
 }
