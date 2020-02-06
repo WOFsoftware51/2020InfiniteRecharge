@@ -51,11 +51,11 @@ public class Robot extends TimedRobot
 	TalonFX _rightSlave = new TalonFX(24);
 	TalonFX _leftMaster = new TalonFX(21);
 	TalonFX _leftSlave = new TalonFX(22);
-	TalonSRX _turret = new TalonSRX(3);
+	TalonSRX _turret = new TalonSRX(5);
 	TalonSRX _intake = new TalonSRX(7);
 	TalonSRX _dogbone = new TalonSRX(8);
-	TalonSRX _shooterMaster = new TalonSRX(6);
-	TalonSRX _shooterSlave = new TalonSRX(5);
+	TalonSRX _shooterMaster = new TalonSRX(3);
+	TalonSRX _shooterSlave = new TalonSRX(4);
 
 	Spark Blinkin = new Spark(0);
 	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
@@ -107,7 +107,6 @@ public class Robot extends TimedRobot
   {
    
 
-
 		/* Ensure motor output is neutral during init */
 		_leftMaster.set(ControlMode.PercentOutput, 0);
 		_rightMaster.set(ControlMode.PercentOutput, 0);
@@ -115,18 +114,20 @@ public class Robot extends TimedRobot
 		_leftMaster.configSupplyCurrentLimit(falcon);
 		_rightSlave.configSupplyCurrentLimit(falcon);
 		_leftSlave.configSupplyCurrentLimit(falcon);
+		_turret.configContinuousCurrentLimit(10);
+		_turret.configPeakCurrentLimit(29);
+		_dogbone.configContinuousCurrentLimit(10);
+		_intake.configContinuousCurrentLimit(10);
 		_shooterMaster.set(ControlMode.PercentOutput, 0);
 		_turret.set(ControlMode.PercentOutput, 0);
+		_dogbone.set(ControlMode.PercentOutput, 0);
+		_intake.set(ControlMode.PercentOutput, 0);
 		_leftSlave.follow(_leftMaster);
 		_rightSlave.follow(_rightMaster);
 		_shooterSlave.follow(_shooterMaster);
 
 		/* Factory Default all hardware to prevent unexpected behaviour */
-		_leftMaster.configFactoryDefault();
-		_rightMaster.configFactoryDefault();
-		_turret.configFactoryDefault();
-		_shooterMaster.configFactoryDefault();
-		_shooterSlave.configFactoryDefault();
+
 		
 		/* Set Neutral mode */
 		
@@ -273,7 +274,12 @@ public class Robot extends TimedRobot
 
 	if (Shoot) //add lockedOn && Aim && 
 	{
-		_shooterMaster.set(ControlMode.PercentOutput, 0.5);
+		_shooterMaster.set(ControlMode.PercentOutput, 0.8);
+	}
+	else
+	{
+		_shooterMaster.set(ControlMode.PercentOutput, 0);
+
 	}
 
 
@@ -405,12 +411,12 @@ public class Robot extends TimedRobot
 		forward = Deadband(forward);
 		turn = Deadband(turn);
 		Shoot = _xboxOp.getBumper(Hand.kRight);
-		Aim = _xboxOp.getBumper(Hand.kRight);
+		//Aim = _xboxOp.getBumper(Hand.kRight);
 		ManAim = _xboxOp.getBumper(Hand.kLeft);
-		AimGO = _xboxOp.getBumperPressed(Hand.kRight);
-		CenterTurret = _xboxOp.getYButton();
-		_intake.set(ControlMode.PercentOutput, _xboxOp.getY(Hand.kLeft));
-		_dogbone.set(ControlMode.PercentOutput, _xboxOp.getY(Hand.kRight));
+		//AimGO = _xboxOp.getBumperPressed(Hand.kRight);
+		//CenterTurret = _xboxOp.getYButton();
+		_intake.set(ControlMode.PercentOutput, (_xboxOp.getY(Hand.kLeft)*-0.3));
+		_dogbone.set(ControlMode.PercentOutput,( _xboxOp.getY(Hand.kRight)*0.3));
 
  
   }
