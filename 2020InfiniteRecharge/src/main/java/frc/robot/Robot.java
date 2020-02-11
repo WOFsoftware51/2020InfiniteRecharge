@@ -18,7 +18,9 @@ import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
-import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+//import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -52,10 +54,20 @@ public class Robot extends TimedRobot
 	TalonFX _leftMaster = new TalonFX(21);
 	TalonFX _leftSlave = new TalonFX(22);
 	TalonSRX _turret = new TalonSRX(5);
-	TalonSRX _intake = new TalonSRX(7);
-	TalonSRX _dogbone = new TalonSRX(8);
+	TalonSRX _transfer = new TalonSRX(8);
+	TalonSRX _dogbone = new TalonSRX(7);
 	TalonSRX _shooterMaster = new TalonSRX(3);
 	TalonSRX _shooterSlave = new TalonSRX(4);
+	TalonSRX _intake = new TalonSRX(6);
+	TalonSRX _winchMaster = new TalonSRX(1);
+	TalonSRX _winchSlave = new TalonSRX(2);
+	Compressor _compressor = new Compressor(1);
+	DoubleSolenoid _deployIntake = new DoubleSolenoid(1,0,1);
+	DoubleSolenoid _hanger = new DoubleSolenoid(1,2,3);
+	DoubleSolenoid _crawler = new DoubleSolenoid(1,4,5);
+	DoubleSolenoid _controlPanel = new DoubleSolenoid(1,6,7);
+
+
 
 	Spark Blinkin = new Spark(0);
 	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
@@ -65,10 +77,11 @@ public class Robot extends TimedRobot
 	Boolean lockedOn = false;
 	Boolean ManAim = false;
 	Boolean AimGO = true;
-	Boolean CenterTurret = true;
+	Boolean CenterTurret = false;
 	Boolean Start = false;
 	Boolean teleopInit = true;
-	Joystick _gamepad = new Joystick(1);
+	Boolean limitSwitch =false;
+	//Joystick _gamepad = new Joystick(1);
 	XboxController _xboxDriver = new XboxController(0);
 	XboxController _xboxOp = new XboxController(1);
 	double tv = 0;
@@ -77,6 +90,10 @@ public class Robot extends TimedRobot
 	double tx = 0;
 	//tx : Horizontal Offset From Crosshair To Target (LL1: -27 degrees to 27 degrees | LL2: -29.8 to 29.8 degrees)
 	double turretAim= 0;
+	double winch = 0;
+	double transfer = 0;
+	double dogbone = 0;
+	double intake = 0;
 	double kP= 0.012;
 	double kI= 0.003;
 	double kD= 0.00002;
@@ -85,8 +102,10 @@ public class Robot extends TimedRobot
 	double range = 500;
 	double gyro = 0;
 	double roll = 0;
+	double shotCurrent = 0;
 	double gyroF = 0;
 	double speedShooter = 0;
+	double potStart = 0;
 
 	//Range of motion for turret in either direction
 	int distanceTurret;
@@ -117,14 +136,18 @@ public class Robot extends TimedRobot
 		_turret.configContinuousCurrentLimit(10);
 		_turret.configPeakCurrentLimit(29);
 		_dogbone.configContinuousCurrentLimit(10);
-		_intake.configContinuousCurrentLimit(10);
+		_transfer.configContinuousCurrentLimit(10);
 		_shooterMaster.set(ControlMode.PercentOutput, 0);
 		_turret.set(ControlMode.PercentOutput, 0);
 		_dogbone.set(ControlMode.PercentOutput, 0);
+		_transfer.set(ControlMode.PercentOutput, 0);
+		_winchMaster.set(ControlMode.PercentOutput, 0);
 		_intake.set(ControlMode.PercentOutput, 0);
 		_leftSlave.follow(_leftMaster);
 		_rightSlave.follow(_rightMaster);
+		_winchSlave.follow(_winchMaster);
 		_shooterSlave.follow(_shooterMaster);
+		_compressor.start();
 
 		/* Factory Default all hardware to prevent unexpected behaviour */
 
@@ -134,18 +157,23 @@ public class Robot extends TimedRobot
 		_shooterSlave.setNeutralMode(NeutralMode.Coast);
 		_shooterMaster.setNeutralMode(NeutralMode.Coast);
 		_turret.setNeutralMode(NeutralMode.Coast);
+		_winchMaster.setNeutralMode(NeutralMode.Brake);
+		_winchSlave.setNeutralMode(NeutralMode.Brake);
 		/* Configure output direction */
 		_leftMaster.setInverted(false);
 		_rightMaster.setInverted(true);
 		_rightSlave.setInverted(true);
 		_leftSlave.setInverted(false);
+		_dogbone.setInverted(true);
 		_turret.setInverted(false);
+		_winchSlave.setInverted(true);
 		_shooterMaster.setInverted(false);
     	_turret.setSelectedSensorPosition(0);
 		_rightMaster.setSelectedSensorPosition(0);
 		_shooterMaster.setSelectedSensorPosition(0);
 		_dogbone.configSelectedFeedbackSensor(TalonSRXFeedbackDevice.Analog,0,0);
 		ahrs.zeroYaw();
+		potStart = _dogbone.getSelectedSensorPosition();
   }
 
   /**
@@ -170,6 +198,9 @@ public class Robot extends TimedRobot
 	SmartDashboard.putNumber("turret", turretAim);
 	SmartDashboard.putNumber("Shooter Speed", speedShooter);
 	SmartDashboard.putNumber("Pot", Potentiometer);
+	SmartDashboard.putNumber("dogbone", dogbone);
+	SmartDashboard.putNumber("transfer", transfer);
+	SmartDashboard.putNumber("Shooter Current", shotCurrent);
 	m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
 	m_chooser.addOption("My Auto", kCustomAuto);
 	m_chooser.addOption("Test", kTest);
@@ -181,6 +212,7 @@ public class Robot extends TimedRobot
 	distanceDrive = _rightMaster.getSelectedSensorPosition();
 	speedShooter = _shooterMaster.getSelectedSensorVelocity();
 	Potentiometer = _dogbone.getSelectedSensorPosition();
+	shotCurrent = _shooterMaster.getSupplyCurrent();
 	//Green = 0.77
 	//Red = 0.61
 	//Purple = 0.03
@@ -222,6 +254,7 @@ public class Robot extends TimedRobot
 			if(distanceTurret>range-100)
 			{
 				turretAim = 0.3;
+
 			}
 			else if(distanceTurret<(range*-1)+100)
 			{
@@ -238,7 +271,7 @@ public class Robot extends TimedRobot
 	}
 	else if(ManAim)
 	{
-		turretAim =_xboxDriver.getX(Hand.kLeft)*0.2;
+		turretAim =_xboxOp.getX(Hand.kLeft)*0.2;
 	}
 	else if(CenterTurret)
 	{
@@ -272,9 +305,13 @@ public class Robot extends TimedRobot
 	
 	//Shoot ball 
 
+	_transfer.set(ControlMode.PercentOutput,transfer);
+	_dogbone.set(ControlMode.PercentOutput, dogbone);
+	_intake.set(ControlMode.PercentOutput, intake);
+
 	if (Shoot) //add lockedOn && Aim && 
 	{
-		_shooterMaster.set(ControlMode.PercentOutput, 0.8);
+		_shooterMaster.set(ControlMode.PercentOutput, 1.0);
 	}
 	else
 	{
@@ -282,6 +319,7 @@ public class Robot extends TimedRobot
 
 	}
 
+	_winchMaster.set(ControlMode.PercentOutput, winch);
 
 
 
@@ -415,9 +453,45 @@ public class Robot extends TimedRobot
 		ManAim = _xboxOp.getBumper(Hand.kLeft);
 		//AimGO = _xboxOp.getBumperPressed(Hand.kRight);
 		//CenterTurret = _xboxOp.getYButton();
-		_intake.set(ControlMode.PercentOutput, (_xboxOp.getY(Hand.kLeft)*-0.3));
-		_dogbone.set(ControlMode.PercentOutput,( _xboxOp.getY(Hand.kRight)*0.3));
+		transfer = _xboxOp.getY(Hand.kLeft)*-0.3;
+		dogbone =  _xboxOp.getY(Hand.kRight)*0.3;
+		if(_xboxOp.getAButton())
+		{
+			dogbone = 0.5;
+			intake = 0.33;
+			if(Potentiometer<(potStart+5)) //pot
+			{
+				transfer = 0.33;
+			}
+			else
+			{
+				transfer = 0;
+			}
+		}
+		else
+		{
+			//dogbone = 0;
+			intake = 0;
+			//transfer = 0;
+		}
 
+		if(_xboxOp.getBButton())
+		{
+			_dogbone.overrideLimitSwitchesEnable(false);
+		}
+		else
+		{
+			_dogbone.overrideLimitSwitchesEnable(true);
+		}
+
+		if(_xboxOp.getYButton())
+		{
+			winch = 0.5;
+		}
+		else
+		{
+			winch = 0;
+		}
  
   }
   
@@ -444,8 +518,20 @@ public class Robot extends TimedRobot
   {
 	_rightMaster.set(ControlMode.PercentOutput, 0);
 	_leftMaster.set(ControlMode.PercentOutput, 0);
+	_shooterMaster.set(ControlMode.PercentOutput, 0);
 	_turret.set(ControlMode.PercentOutput, 0);
+	_dogbone.set(ControlMode.PercentOutput, 0);
+	_transfer.set(ControlMode.PercentOutput, 0);
+	_winchMaster.set(ControlMode.PercentOutput, 0);
 	_intake.set(ControlMode.PercentOutput, 0);
+	turretAim= 0;
+	winch = 0;
+	transfer = 0;
+	dogbone = 0;
+	intake = 0;
+	forward = 0;
+	turn = 0;
+	//.set(ControlMode.PercentOutput, 0);
 	teleopInit = true;
 
   }
