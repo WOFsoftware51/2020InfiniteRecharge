@@ -22,6 +22,7 @@ import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 //import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SerialPort;
+import edu.wpi.first.wpilibj.Servo;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.XboxController;
@@ -61,11 +62,15 @@ public class Robot extends TimedRobot
 	TalonSRX _intake = new TalonSRX(6);
 	TalonSRX _winchMaster = new TalonSRX(1);
 	TalonSRX _winchSlave = new TalonSRX(2);
+	TalonSRX _traverser = new TalonSRX(2);
+	TalonSRX _wheelOfFortune = new TalonSRX(2);
 	Compressor _compressor = new Compressor(1);
 	DoubleSolenoid _deployIntake = new DoubleSolenoid(1,0,1);
-	DoubleSolenoid _hanger = new DoubleSolenoid(1,2,3);
+	DoubleSolenoid _winchBrake = new DoubleSolenoid(1,2,3);
 	DoubleSolenoid _crawler = new DoubleSolenoid(1,4,5);
 	DoubleSolenoid _controlPanel = new DoubleSolenoid(1,6,7);
+	Servo _rightRelease = new Servo(1);
+	Servo _leftRelease = new Servo(2);
 
 
 
@@ -81,6 +86,7 @@ public class Robot extends TimedRobot
 	Boolean Start = false;
 	Boolean teleopInit = true;
 	Boolean limitSwitch =false;
+	Boolean winchBrake = false;
 	//Joystick _gamepad = new Joystick(1);
 	XboxController _xboxDriver = new XboxController(0);
 	XboxController _xboxOp = new XboxController(1);
@@ -93,13 +99,14 @@ public class Robot extends TimedRobot
 	double winch = 0;
 	double transfer = 0;
 	double dogbone = 0;
+	double traverser = 0;
 	double intake = 0;
 	double kP= 0.012;
 	double kI= 0.003;
 	double kD= 0.00002;
 	double forward = 0;
 	double turn = 0;
-	double range = 500;
+	double range = 1000;
 	double gyro = 0;
 	double roll = 0;
 	double shotCurrent = 0;
@@ -112,7 +119,7 @@ public class Robot extends TimedRobot
 	int distanceDrive;
 	SupplyCurrentLimitConfiguration falcon = new SupplyCurrentLimitConfiguration(true, 60, 60, 0.001);
 
-	
+	///neverrest 1120
 
   
   PIDController AimPID= new PIDController(kP, kI, kD);
@@ -165,7 +172,7 @@ public class Robot extends TimedRobot
 		_rightSlave.setInverted(true);
 		_leftSlave.setInverted(false);
 		_dogbone.setInverted(true);
-		_turret.setInverted(false);
+		_turret.setInverted(true);
 		_winchSlave.setInverted(true);
 		_shooterMaster.setInverted(false);
     	_turret.setSelectedSensorPosition(0);
@@ -196,7 +203,7 @@ public class Robot extends TimedRobot
 	SmartDashboard.putData("Auto choices", m_chooser);
 	SmartDashboard.putBoolean("AIM", Aim);
 	SmartDashboard.putNumber("turret", turretAim);
-	SmartDashboard.putNumber("Shooter Speed", speedShooter);
+	SmartDashboard.putNumber("Shooter Speed", speedShooter/8192*600);  //8192 ticks per rev, 600 counts per minute
 	SmartDashboard.putNumber("Pot", Potentiometer);
 	SmartDashboard.putNumber("dogbone", dogbone);
 	SmartDashboard.putNumber("transfer", transfer);
@@ -251,18 +258,18 @@ public class Robot extends TimedRobot
 		}
 		else
 		{
-			if(distanceTurret>range-100)
+			if(distanceTurret>range-300)
 			{
-				turretAim = 0.3;
+				turretAim = 0.2;
 
 			}
-			else if(distanceTurret<(range*-1)+100)
+			else if(distanceTurret<(range*-1)+300)
 			{
-				turretAim = -0.3;
+				turretAim = -0.2;
 			}
 			else if (AimGO)
 			{
-				turretAim = 0.3;
+				turretAim = 0.2;
 				AimGO = false;
 			}
 			
@@ -282,23 +289,23 @@ public class Robot extends TimedRobot
 		turretAim = 0;
 	}
 
-	if(distanceTurret<-range && turretAim>0)
+	if(distanceTurret<-range && turretAim<0)
 	{
 		turretAim=0;
 	}
-	else if (distanceTurret>range && turretAim<0)
+	else if (distanceTurret>range && turretAim>0)
 	{
 		turretAim=0;
 	}
 	else
 	{
-		if(turretAim>0.6)
+		if(turretAim>0.3)
 		{
-			turretAim=0.6;
+			turretAim=0.3;
 		}
-		else if(turretAim<-0.6)
+		else if(turretAim<-0.3)
 		{
-			turretAim=-0.6;
+			turretAim=-0.3;
 		}
 	}
 	_turret.set(ControlMode.PercentOutput, turretAim);
@@ -455,6 +462,17 @@ public class Robot extends TimedRobot
 		//CenterTurret = _xboxOp.getYButton();
 		transfer = _xboxOp.getY(Hand.kLeft)*-0.3;
 		dogbone =  _xboxOp.getY(Hand.kRight)*0.3;
+
+		if(_xboxOp.getXButton())
+		{
+			_rightRelease.setAngle(0);
+			_leftRelease.setAngle(180);
+		}
+		else
+		{
+			_rightRelease.setAngle(180);
+			_leftRelease.setAngle(0);
+		}
 		if(_xboxOp.getAButton())
 		{
 			dogbone = 0.5;
