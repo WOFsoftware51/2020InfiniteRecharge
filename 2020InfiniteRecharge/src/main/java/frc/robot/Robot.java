@@ -26,6 +26,7 @@ import edu.wpi.first.wpilibj.Servo;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.controller.PIDController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -62,13 +63,15 @@ public class Robot extends TimedRobot
 	TalonSRX _intake = new TalonSRX(6);
 	TalonSRX _winchMaster = new TalonSRX(1);
 	TalonSRX _winchSlave = new TalonSRX(2);
-	TalonSRX _traverser = new TalonSRX(2);
+	TalonSRX _traverser = new TalonSRX(9);
 	TalonSRX _wheelOfFortune = new TalonSRX(2);
 	Compressor _compressor = new Compressor(1);
-	DoubleSolenoid _deployIntake = new DoubleSolenoid(1,0,1);
-	DoubleSolenoid _winchBrake = new DoubleSolenoid(1,2,3);
-	DoubleSolenoid _crawler = new DoubleSolenoid(1,4,5);
-	DoubleSolenoid _controlPanel = new DoubleSolenoid(1,6,7);
+	DoubleSolenoid _deployIntake = new DoubleSolenoid(1,0,7);
+	DoubleSolenoid _winchBrake = new DoubleSolenoid(2,2,5);
+	DoubleSolenoid _crawler = new DoubleSolenoid(2,1,6);
+	DoubleSolenoid _hangPull = new DoubleSolenoid(1,2,5);
+	DoubleSolenoid _FlapperL = new DoubleSolenoid(2,3,4);
+	DoubleSolenoid _FlapperR = new DoubleSolenoid(1,1,6);
 	Servo _rightRelease = new Servo(1);
 	Servo _leftRelease = new Servo(2);
 
@@ -87,6 +90,15 @@ public class Robot extends TimedRobot
 	Boolean teleopInit = true;
 	Boolean limitSwitch =false;
 	Boolean winchBrake = false;
+	Boolean deployIntake = false;
+	Boolean crawler = false;
+	Boolean hangPull = false;
+	Boolean FlapperL = false;
+	Boolean FlapperR = false;
+	Boolean Pulse = false;
+	Boolean humanLoad = false;
+	Boolean eat = false;
+
 	//Joystick _gamepad = new Joystick(1);
 	XboxController _xboxDriver = new XboxController(0);
 	XboxController _xboxOp = new XboxController(1);
@@ -97,6 +109,7 @@ public class Robot extends TimedRobot
 	//tx : Horizontal Offset From Crosshair To Target (LL1: -27 degrees to 27 degrees | LL2: -29.8 to 29.8 degrees)
 	double turretAim= 0;
 	double winch = 0;
+	int count = 0;
 	double transfer = 0;
 	double dogbone = 0;
 	double traverser = 0;
@@ -173,13 +186,14 @@ public class Robot extends TimedRobot
 		_leftSlave.setInverted(false);
 		_dogbone.setInverted(true);
 		_turret.setInverted(true);
+		_intake.setInverted(true);
 		_winchSlave.setInverted(true);
 		_shooterMaster.setInverted(false);
     	_turret.setSelectedSensorPosition(0);
 		_rightMaster.setSelectedSensorPosition(0);
 		_shooterMaster.setSelectedSensorPosition(0);
-		_dogbone.configSelectedFeedbackSensor(TalonSRXFeedbackDevice.Analog,0,0);
 		ahrs.zeroYaw();
+		_dogbone.setSelectedSensorPosition(0);
 		potStart = _dogbone.getSelectedSensorPosition();
   }
 
@@ -205,7 +219,10 @@ public class Robot extends TimedRobot
 	SmartDashboard.putNumber("turret", turretAim);
 	SmartDashboard.putNumber("Shooter Speed", speedShooter/8192*600);  //8192 ticks per rev, 600 counts per minute
 	SmartDashboard.putNumber("Pot", Potentiometer);
+	SmartDashboard.putNumber("Pot2", potStart);
+	SmartDashboard.putBoolean("Pulse", Pulse);
 	SmartDashboard.putNumber("dogbone", dogbone);
+	SmartDashboard.putNumber("count", count);
 	SmartDashboard.putNumber("transfer", transfer);
 	SmartDashboard.putNumber("Shooter Current", shotCurrent);
 	m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
@@ -220,6 +237,65 @@ public class Robot extends TimedRobot
 	speedShooter = _shooterMaster.getSelectedSensorVelocity();
 	Potentiometer = _dogbone.getSelectedSensorPosition();
 	shotCurrent = _shooterMaster.getSupplyCurrent();
+
+	//these are solenoids
+	if (winchBrake)
+	{
+		_winchBrake.set(Value.kForward);
+	}
+	else
+	{
+		_winchBrake.set(Value.kReverse);
+	}
+
+	if (deployIntake)
+	{
+		_deployIntake.set(Value.kForward);
+	}
+	else
+	{
+		_deployIntake.set(Value.kReverse);
+	}
+
+	if (crawler)
+	{
+		_crawler.set(Value.kForward);
+	}
+	else
+	{ 	
+		_crawler.set(Value.kReverse);
+	}
+
+	if (hangPull)
+	{
+		_hangPull.set(Value.kForward);
+	}
+	else
+	{ 	
+		_hangPull.set(Value.kReverse);
+	}	
+
+	if (FlapperL)
+	{
+		_FlapperL.set(Value.kForward);
+	}
+	else
+	{ 	
+		_FlapperL.set(Value.kReverse);
+	}
+
+
+	if (FlapperR)
+	{
+		_FlapperR.set(Value.kForward);
+	}
+	else
+	{ 	
+		_FlapperR.set(Value.kReverse);
+	}
+
+
+
 	//Green = 0.77
 	//Red = 0.61
 	//Purple = 0.03
@@ -315,13 +391,16 @@ public class Robot extends TimedRobot
 	_transfer.set(ControlMode.PercentOutput,transfer);
 	_dogbone.set(ControlMode.PercentOutput, dogbone);
 	_intake.set(ControlMode.PercentOutput, intake);
+	_traverser.set(ControlMode.PercentOutput, traverser);
 
 	if (Shoot) //add lockedOn && Aim && 
 	{
-		_shooterMaster.set(ControlMode.PercentOutput, 1.0);
+		_dogbone.overrideLimitSwitchesEnable(false);
+		_shooterMaster.set(ControlMode.PercentOutput, 1);
 	}
 	else
 	{
+		_dogbone.overrideLimitSwitchesEnable(true);
 		_shooterMaster.set(ControlMode.PercentOutput, 0);
 
 	}
@@ -450,10 +529,32 @@ public class Robot extends TimedRobot
 			_rightSlave.setNeutralMode(NeutralMode.Coast);
 			teleopInit = false;
 		}
-    
+	
+		//Solenoid Test Buttons
 		forward = -1 *_xboxDriver.getY(Hand.kLeft);
-		turn = -_xboxDriver.getX(Hand.kRight);		
+		turn = -_xboxDriver.getX(Hand.kRight);
+		winchBrake = _xboxDriver.getStartButton();
+		deployIntake = _xboxDriver.getAButton();
+		crawler = _xboxDriver.getYButton();
+		hangPull = _xboxDriver.getBackButton();
+		FlapperR = _xboxDriver.getXButton();
+		FlapperL = _xboxDriver.getBButton();
+		if(_xboxDriver.getBumper(Hand.kLeft))
+		{
+			traverser = 0.6;
+		}
+		else if(_xboxDriver.getBumper(Hand.kRight))
+		{
+			traverser = -.6;
+		}
+		else
+		{
+			traverser = 0;
+
+		}
+
 		forward = Deadband(forward);
+		
 		turn = Deadband(turn);
 		Shoot = _xboxOp.getBumper(Hand.kRight);
 		//Aim = _xboxOp.getBumper(Hand.kRight);
@@ -473,17 +574,51 @@ public class Robot extends TimedRobot
 			_rightRelease.setAngle(180);
 			_leftRelease.setAngle(0);
 		}
-		if(_xboxOp.getAButton())
+		if(_xboxOp.getAButton()||humanLoad)
 		{
-			dogbone = 0.5;
-			intake = 0.33;
-			if(Potentiometer<(potStart+5)) //pot
+			eat = true;
+		}
+		else
+		{
+			eat = false;
+		}
+
+		if(eat)
+		{
+			if(humanLoad)
+			{
+				intake = 0;				
+			}
+			else
+			{
+				intake = 0.5;	
+			}
+			
+			if(Potentiometer<200) //pot
 			{
 				transfer = 0.33;
 			}
 			else
 			{
 				transfer = 0;
+			}
+			if(_dogbone.isFwdLimitSwitchClosed()==1 && count < 1)
+			{
+				Pulse = true;
+				count++;
+				if(Shoot==false)
+				{
+					dogbone = -0.3;
+				}
+			}
+			else if(_dogbone.isFwdLimitSwitchClosed()==1)
+			{
+				dogbone = 0.5;
+			}
+			else
+			{
+				count=0;
+				dogbone = 0.5;
 			}
 		}
 		else
@@ -493,14 +628,9 @@ public class Robot extends TimedRobot
 			//transfer = 0;
 		}
 
-		if(_xboxOp.getBButton())
-		{
-			_dogbone.overrideLimitSwitchesEnable(false);
-		}
-		else
-		{
-			_dogbone.overrideLimitSwitchesEnable(true);
-		}
+
+
+		humanLoad =_xboxOp.getBButton();
 
 		if(_xboxOp.getYButton())
 		{
