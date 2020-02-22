@@ -11,7 +11,6 @@ import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.DemandType;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.SupplyCurrentLimitConfiguration;
-import com.ctre.phoenix.motorcontrol.TalonSRXFeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.TalonFX;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
@@ -84,7 +83,8 @@ public class Robot extends TimedRobot
 	Boolean Shoot = false;
 	Boolean lockedOn = false;
 	Boolean ManAim = false;
-	Boolean AimGO = true;
+	Boolean AimGO = false;
+	Boolean AimGo2 = false;
 	Boolean CenterTurret = false;
 	Boolean Start = false;
 	Boolean teleopInit = true;
@@ -114,15 +114,20 @@ public class Robot extends TimedRobot
 	double dogbone = 0;
 	double traverser = 0;
 	double intake = 0;
-	double kP= 0.012;
-	double kI= 0.003;
-	double kD= 0.00002;
+	final double turretP= 0.02;
+	final double turretI= 0.006;
+	final double turretD= 0.00002;
+	final double shootP= 0.6;
+	final double shootI= 0.0;
+	final double shootD= 2;
+	final double shootF= 0.006;//6;
 	double forward = 0;
 	double turn = 0;
-	double range = 1000;
+	double range = 3000;
 	double gyro = 0;
 	double roll = 0;
 	double shotCurrent = 0;
+	final double kSpeed = 7255*8192/600;
 	double gyroF = 0;
 	double speedShooter = 0;
 	double potStart = 0;
@@ -135,7 +140,7 @@ public class Robot extends TimedRobot
 	///neverrest 1120
 
   
-  PIDController AimPID= new PIDController(kP, kI, kD);
+  PIDController AimPID= new PIDController(turretP, turretI, turretD);
 
   /**
    * This function is run when the robot is first started up and should be
@@ -167,6 +172,11 @@ public class Robot extends TimedRobot
 		_rightSlave.follow(_rightMaster);
 		_winchSlave.follow(_winchMaster);
 		_shooterSlave.follow(_shooterMaster);
+		_shooterMaster.config_kF(0, shootF, 30);
+		_shooterMaster.config_kP(0, shootP, 30);
+		_shooterMaster.config_kI(0, shootI, 30);
+		_shooterMaster.config_kD(0, shootD, 30);
+		_shooterMaster.setSensorPhase(true);
 		_compressor.start();
 
 		/* Factory Default all hardware to prevent unexpected behaviour */
@@ -189,6 +199,7 @@ public class Robot extends TimedRobot
 		_intake.setInverted(true);
 		_winchSlave.setInverted(true);
 		_shooterMaster.setInverted(false);
+		_shooterSlave.setInverted(false);
     	_turret.setSelectedSensorPosition(0);
 		_rightMaster.setSelectedSensorPosition(0);
 		_shooterMaster.setSelectedSensorPosition(0);
@@ -218,6 +229,8 @@ public class Robot extends TimedRobot
 	SmartDashboard.putBoolean("AIM", Aim);
 	SmartDashboard.putNumber("turret", turretAim);
 	SmartDashboard.putNumber("Shooter Speed", speedShooter/8192*600);  //8192 ticks per rev, 600 counts per minute
+	SmartDashboard.putNumber("Shooter Speed Raw ", speedShooter);  //8192 ticks per rev, 600 counts per minute
+	SmartDashboard.putNumber("Shooter Speed Desired", kSpeed);  //8192 ticks per rev, 600 counts per minute
 	SmartDashboard.putNumber("Pot", Potentiometer);
 	SmartDashboard.putNumber("Pot2", potStart);
 	SmartDashboard.putBoolean("Pulse", Pulse);
@@ -334,18 +347,18 @@ public class Robot extends TimedRobot
 		}
 		else
 		{
-			if(distanceTurret>range-300)
+			if(distanceTurret>range-700)
 			{
-				turretAim = 0.2;
+				turretAim = -0.4;
 
 			}
-			else if(distanceTurret<(range*-1)+300)
+			else if(distanceTurret<(range*-1)+700)
 			{
-				turretAim = -0.2;
+				turretAim = 0.4;
 			}
 			else if (AimGO)
 			{
-				turretAim = 0.2;
+				turretAim = 0.4;
 				AimGO = false;
 			}
 			
@@ -375,13 +388,13 @@ public class Robot extends TimedRobot
 	}
 	else
 	{
-		if(turretAim>0.3)
+		if(turretAim>0.4)
 		{
-			turretAim=0.3;
+			turretAim=0.4;
 		}
-		else if(turretAim<-0.3)
+		else if(turretAim<-0.4)
 		{
-			turretAim=-0.3;
+			turretAim=-0.4;
 		}
 	}
 	_turret.set(ControlMode.PercentOutput, turretAim);
@@ -396,7 +409,8 @@ public class Robot extends TimedRobot
 	if (Shoot) //add lockedOn && Aim && 
 	{
 		_dogbone.overrideLimitSwitchesEnable(false);
-		_shooterMaster.set(ControlMode.PercentOutput, 1);
+		_shooterMaster.set(ControlMode.Velocity, kSpeed);
+		//_shooterMaster.set(ControlMode.PercentOutput, 0.85);
 	}
 	else
 	{
@@ -557,6 +571,25 @@ public class Robot extends TimedRobot
 		
 		turn = Deadband(turn);
 		Shoot = _xboxOp.getBumper(Hand.kRight);
+		if(_xboxOp.getTriggerAxis(Hand.kLeft)>0.8)
+		{
+			Aim = true;
+			if(AimGo2)
+			{
+				AimGO = true;
+				AimGo2= false;
+			}
+
+		}
+		else
+		{
+			Aim = false;
+			AimGO = false;
+			AimGo2= true;
+
+
+		}
+	
 		//Aim = _xboxOp.getBumper(Hand.kRight);
 		ManAim = _xboxOp.getBumper(Hand.kLeft);
 		//AimGO = _xboxOp.getBumperPressed(Hand.kRight);
@@ -594,9 +627,20 @@ public class Robot extends TimedRobot
 				intake = 0.5;	
 			}
 			
-			if(Potentiometer<200) //pot
+			if(Potentiometer<100) //pot
 			{
-				transfer = 0.33;
+				if(Shoot)
+				{
+					transfer = 0.7;
+				}
+				else
+				{
+					transfer = 0.35;
+				}
+			}
+			else if(Shoot)
+			{
+				transfer = 0.4;
 			}
 			else
 			{
@@ -608,8 +652,12 @@ public class Robot extends TimedRobot
 				count++;
 				if(Shoot==false)
 				{
-					dogbone = -0.3;
+					dogbone = -0.4;
 				}
+			}
+			else if(Shoot)
+			{
+				dogbone = 1;
 			}
 			else if(_dogbone.isFwdLimitSwitchClosed()==1)
 			{
