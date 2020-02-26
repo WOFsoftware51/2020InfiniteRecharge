@@ -63,7 +63,7 @@ public class Robot extends TimedRobot
 	TalonSRX _winchMaster = new TalonSRX(1);
 	TalonSRX _winchSlave = new TalonSRX(2);
 	TalonSRX _traverser = new TalonSRX(9);
-	TalonSRX _wheelOfFortune = new TalonSRX(2);
+	TalonSRX _wheelOfFortune = new TalonSRX(10);
 	Compressor _compressor = new Compressor(1);
 	DoubleSolenoid _deployIntake = new DoubleSolenoid(1,0,7);
 	DoubleSolenoid _winchBrake = new DoubleSolenoid(2,2,5);
@@ -551,8 +551,25 @@ public class Robot extends TimedRobot
 		deployIntake = _xboxDriver.getAButton();
 		crawler = _xboxDriver.getYButton();
 		hangPull = _xboxDriver.getBackButton();
-		FlapperR = _xboxDriver.getXButton();
-		FlapperL = _xboxDriver.getBButton();
+		if(300>_xboxOp.getPOV()&&_xboxOp.getPOV()>200)
+		{
+			FlapperL=true;
+		}
+		else
+		{
+			FlapperL=false;
+
+		}
+		if(135>_xboxOp.getPOV()&&_xboxOp.getPOV()>60)
+		{
+			FlapperR=true;
+
+		}
+		else
+		{
+			FlapperR=false;
+
+		}
 		if(_xboxDriver.getBumper(Hand.kLeft))
 		{
 			traverser = 0.6;
@@ -596,6 +613,14 @@ public class Robot extends TimedRobot
 		//CenterTurret = _xboxOp.getYButton();
 		transfer = _xboxOp.getY(Hand.kLeft)*-0.3;
 		dogbone =  _xboxOp.getY(Hand.kRight)*0.3;
+		if(_xboxOp.getStartButton())
+		{
+			_wheelOfFortune.set(ControlMode.PercentOutput, 0.5);
+		}
+		else
+		{
+			_wheelOfFortune.set(ControlMode.PercentOutput, 0.0);
+		}
 
 		if(_xboxOp.getXButton())
 		{
@@ -661,12 +686,12 @@ public class Robot extends TimedRobot
 			}
 			else if(_dogbone.isFwdLimitSwitchClosed()==1)
 			{
-				dogbone = 0.5;
+				dogbone = 0.3;
 			}
 			else
 			{
 				count=0;
-				dogbone = 0.5;
+				dogbone = 0.3;
 			}
 		}
 		else
