@@ -24,6 +24,7 @@ import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
+import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 //import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.Servo;
@@ -96,6 +97,7 @@ public class Robot extends TimedRobot
 	Boolean ManAim = false;
 	Boolean AimGO = false;
 	Boolean AimGo2 = false;
+	Boolean Hanging = false;
 	Boolean CenterTurret = false;
 	Boolean Start = false;
 	Boolean teleopInit = true;
@@ -111,6 +113,8 @@ public class Robot extends TimedRobot
 	Boolean eat = false;
 	Boolean SlowBot = false;
 	Boolean AutoShot2 = false;
+	Boolean Fire = false;
+	Boolean Spin = false;
 
 	//Joystick _gamepad = new Joystick(1);
 	XboxController _xboxDriver = new XboxController(0);
@@ -151,6 +155,7 @@ public class Robot extends TimedRobot
 	double potStart = 0;
 	int Timer = 0;
 	int autonState = 0;
+	int wheel = 0;
 	String gameData;
 
 
@@ -232,8 +237,9 @@ public class Robot extends TimedRobot
     	_turret.setSelectedSensorPosition(0);
 		_rightMaster.setSelectedSensorPosition(0);
 		_shooterMaster.setSelectedSensorPosition(0);
-		ahrs.zeroYaw();
+		_wheelOfFortune.setSelectedSensorPosition(0);
 		_dogbone.setSelectedSensorPosition(0);
+		ahrs.zeroYaw();
 		potStart = _dogbone.getSelectedSensorPosition();
  	 }
 
@@ -253,10 +259,14 @@ public class Robot extends TimedRobot
    	 SmartDashboard.putNumber("Gyro", gyro);
   	 SmartDashboard.putNumber("distanceDrive", distanceDrive);
 	 SmartDashboard.putNumber("Gyro Fused", gyroF);
-	 SmartDashboard.putNumber("Roll", roll);
 	 SmartDashboard.putNumber("Drive", forward);
 	 SmartDashboard.putData("Auto choices", m_chooser);
 	 SmartDashboard.putBoolean("AIM", Aim);
+	 SmartDashboard.putBoolean("spin", Spin);
+	 SmartDashboard.putBoolean("fire", Fire);
+	 SmartDashboard.putBoolean("eat", eat);
+	 SmartDashboard.putBoolean("shoot", Shoot);
+	 SmartDashboard.putBoolean("humanload", humanLoad);
 	 SmartDashboard.putNumber("turret", turretAim);
 	 SmartDashboard.putNumber("Shooter Speed", speedShooter/8192*600);  //8192 ticks per rev, 600 counts per minute
 	 SmartDashboard.putNumber("Shooter Speed Raw ", speedShooter);  //8192 ticks per rev, 600 counts per minute
@@ -269,8 +279,8 @@ public class Robot extends TimedRobot
 	 SmartDashboard.putNumber("count", count);
 	 SmartDashboard.putNumber("transfer", transfer);
 	 SmartDashboard.putNumber("Shooter Current", shotCurrent);
-	 SmartDashboard.putString("Color", colString);
-
+	// SmartDashboard.putString("Color", colString);
+	SmartDashboard.putNumber("Wheel Distance", wheel);
 	 m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
 	 m_chooser.addOption("My Auto", kCustomAuto);
 	 m_chooser.addOption("Test", kTest);
@@ -287,31 +297,10 @@ public class Robot extends TimedRobot
 	 speedShooter = _shooterMaster.getSelectedSensorVelocity();
 	 Potentiometer = _dogbone.getSelectedSensorPosition();
 	 shotCurrent = _shooterMaster.getSupplyCurrent();
+	 wheel = _wheelOfFortune.getSelectedSensorPosition();
 
 	 gameData = DriverStation.getInstance().getGameSpecificMessage();
 
-  if(gameData.length() > 0)
-  {
-    switch (gameData.charAt(0))
-    {
-      case 'B' :
-      //
-      Blinkin.set(-0.09);
-        break;
-      case 'G' :
-      Blinkin.set(0.35);
-        break;
-      case 'R' :
-      Blinkin.set(-0.11);
-        break;
-      case 'Y' :
-      Blinkin.set(-0.07); 
-        break;
-      default :
-        //This is corrupt data
-        break;
-    }
-  }
     //Code for no data received yet
 		//these are solenoids
 		if (winchBrake)
@@ -343,11 +332,11 @@ public class Robot extends TimedRobot
 
 		if (hangPull)
 		{
-		_hangPull.set(Value.kForward);
+		_hangPull.set(Value.kReverse);
 		}
 		else
 		{ 	
-		_hangPull.set(Value.kReverse);
+		_hangPull.set(Value.kForward);
 		}	
 
 		if (FlapperL)
@@ -373,6 +362,10 @@ public class Robot extends TimedRobot
 		//Red = 0.61
 		//Purple = 0.03
 
+		if(hangPull)
+		{
+			Hanging=true;
+		}
 		if(Aim)
 		{
 			if(tx>-1.5 && tx<1.5 && tv == 1)
@@ -391,15 +384,41 @@ public class Robot extends TimedRobot
 
 		else 
 		{
-			Blinkin.set(0.09);
+			if(gameData.length() > 0)
+ 			{
+				 switch (gameData.charAt(0))
+				 {
+					case 'B' :
+					Blinkin.set(-0.09);
+        			break;
+      				case 'G' :
+      				Blinkin.set(0.35);
+        			break;
+      				case 'R' :
+      				Blinkin.set(-0.11);
+        			break;
+      				case 'Y' :
+      				Blinkin.set(-0.07); 
+        			break;
+      				default :
+        			//This is corrupt data
+        			break;
+    			}
+			  }
+			  else
+			  {
+				Blinkin.set(0.09);
+			  }
+	
 			NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
 		}
 
 		tv = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tv").getDouble(0);
 		tx = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0);
 
-		if( Aim)
+		if(Aim)
 		{
+			Shoot = true;
 			if(tv==1)
 			{
 				//turretAim =tx;
@@ -408,37 +427,62 @@ public class Robot extends TimedRobot
 			else
 			{
 				if(distanceTurret>range-700)
-			{
-				turretAim = -0.4;
-			}
+				{
+					turretAim = -0.4;
+				}	
 
-			else if(distanceTurret<(range*-1)+700)
-			{
-				turretAim = 0.4;
-			}
-			else if (AimGO)
-			{
-				turretAim = 0.4;
-				AimGO = false;
-			}
+				else if(distanceTurret<(range*-1)+700)
+				{
+					turretAim = 0.4;
+				}
+				else if (AimGO)
+				{
+					turretAim = 0.4;
+					AimGO = false;
+				}
 			
-		}
+			}
 				
-	}
+		}
 
 		else if(ManAim)
 		{
-			turretAim =_xboxOp.getX(Hand.kLeft)*0.2;
+			turretAim =_xboxOp.getX(Hand.kLeft)*-0.3;
 		}
 		else if(CenterTurret)
 		{
- 		 turretAim = AimPID.calculate((-distanceTurret/10), 0);
+			if (distanceTurret<-400)
+			{
+				turretAim= 0.5;
+			}
+			else if (distanceTurret>400)
+			{
+				turretAim= -0.5;
+			}
+			else if (distanceTurret<-150)
+			{
+				turretAim= 0.2;
+			}
+			else if (distanceTurret>150)
+			{
+				turretAim= -0.2;
+			}
+			else
+			{
+				turretAim= 0;
+			}
+			//turretAim = AimPID.calculate((-distanceTurret/10), 0);
+			//bit
+			//distanceTurret
+
+			//200
 		}
 		else
 		{
 			turretAim = 0;
 		}
 
+		
 		if(distanceTurret<-range && turretAim<0)
 		{
 			turretAim=0;
@@ -449,78 +493,87 @@ public class Robot extends TimedRobot
 		}
 		else
 		{
-
-		if(turretAim>0.4)
-		
-		{
-			turretAim=0.4;
-		}
-		else if(turretAim<-0.4)
-		{
-			turretAim=-0.4;
-		}
+			if(turretAim>0.4)
+			{
+				turretAim=0.4;
+			}
+			else if(turretAim<-0.4)
+			{
+				turretAim=-0.4;
+			}
 
 		}
 		_turret.set(ControlMode.PercentOutput, turretAim);
 		//Shoot ball 
-		
+		if (Fire && lockedOn && (speedShooter>7000))
+		{
+			_xboxOp.setRumble(RumbleType.kLeftRumble, 1.0);
+			_xboxOp.setRumble(RumbleType.kRightRumble, 1.0);
+			Shoot = true;
+			humanLoad = true;
+		}
+		else
+		{
+			_xboxOp.setRumble(RumbleType.kLeftRumble, 0);
+			_xboxOp.setRumble(RumbleType.kRightRumble, 0);
+		}
 		if(humanLoad)
 		{
 			eat = true;
 		}
 		if(eat)
 		{
-		if(humanLoad)
-		{
-			intake = 0;				
-		}
-		else
-		{
-			intake = 0.8;	
-		}
-		
-		if(Potentiometer<100) //pot
-		{
-			if(Shoot)
+			if(humanLoad)
 			{
-				transfer = 0.7;
+				intake = 0;				
 			}
 			else
 			{
-				transfer = 0.35;
+				intake = 0.8;	
 			}
-		}
-		else if(Shoot)
-		{
-			transfer = 0.4;
-		}
-		else
-		{
-			transfer = 0;
-		}
-		if(_dogbone.isFwdLimitSwitchClosed()==1 && count < 1)
-		{
-			Pulse = true;
-			count++;
-			if(Shoot==false)
+		
+			if(Potentiometer<100) //pot
 			{
-				dogbone = -0.4;
+				if(Shoot)
+				{
+					transfer = 0.8;
+				}
+				else
+				{
+					transfer = 0.35;
+				}
+			}
+			else if(Shoot)
+			{
+				transfer = 0.4;
+			}
+			else
+			{
+				transfer = 0;
+			}
+			if(_dogbone.isFwdLimitSwitchClosed()==1 && count < 1)
+			{
+				Pulse = true;
+				count++;
+				if(Shoot==false)
+				{
+					dogbone = -0.3;
+				}
+			}
+			else if(Shoot)
+			{
+				dogbone = 1;
+			}
+			else if(_dogbone.isFwdLimitSwitchClosed()==1)
+			{
+				dogbone = 0.5;
+			}
+			else
+			{
+				count=0;
+				dogbone = 0.5;
 			}
 		}
-		else if(Shoot)
-		{
-			dogbone = 1;
-		}
-		else if(_dogbone.isFwdLimitSwitchClosed()==1)
-		{
-			dogbone = 0.3;
-		}
-		else
-		{
-			count=0;
-			dogbone = 0.3;
-		}
-	}
 	else
 	{
 		//dogbone = 0;
@@ -655,7 +708,6 @@ public class Robot extends TimedRobot
 			{
 				forward = 0;
 				Aim = true;
-				AimGO = true;
 				Shoot = true;
 				FlapperL=true;
 				FlapperR=true;				
@@ -689,6 +741,7 @@ public class Robot extends TimedRobot
 				forward = -0.4;
 				if (distanceDrive >5000)
 				{
+					AimGO = true;
 					autonState = SHOOT;
 				}
 				break;
@@ -729,7 +782,6 @@ public class Robot extends TimedRobot
 			{
 				forward = 0;
 				Aim = true;
-				AimGO = true;
 				Shoot = true;
 				FlapperL=true;
 				FlapperR=true;				
@@ -764,6 +816,7 @@ public class Robot extends TimedRobot
 			forward = -0.4;
 			if (distanceDrive >5000)
 			{
+				AimGO = true;
 				autonState = SHOOT;
 			}
 			break;
@@ -853,30 +906,35 @@ public class Robot extends TimedRobot
 		forward = Deadband(forward);		
 		turn = Deadband(turn);
 		turn = turn*turn*turn;
+		turn = turn *0.8;
 		forward = forward*forward*forward;
-		//winchBrake = _xboxDriver.getStartButton();
+		winchBrake = _xboxDriver.getStartButton();
 		deployIntake = _xboxDriver.getAButton();
 		crawler = _xboxDriver.getYButton();
-		hangPull = _xboxDriver.getBackButton();
-		if(300>_xboxOp.getPOV()&&_xboxOp.getPOV()>200)
+		hangPull = _xboxOp.getStartButton();
+
+		if(300>_xboxDriver.getPOV()&&_xboxDriver.getPOV()>200)
 		{
 			FlapperL=true;
 		}
 		else
 		{
 			FlapperL=false;
-
 		}
-		if(135>_xboxOp.getPOV()&&_xboxOp.getPOV()>60)
+
+		if(135>_xboxDriver.getPOV()&&_xboxDriver.getPOV()>60)
 		{
 			FlapperR=true;
-
+		}
+		else if(Shoot&&(FlapperL==false))
+		{		
+			FlapperR=true;
 		}
 		else
 		{
 			FlapperR=false;
-
 		}
+
 		if(_xboxDriver.getBumper(Hand.kLeft))
 		{
 			traverser = 0.6;
@@ -890,9 +948,50 @@ public class Robot extends TimedRobot
 			traverser = 0;
 
 		}
+		if(_xboxDriver.getTriggerAxis(Hand.kLeft)>0.8)
+		{
+			_leftMaster.setNeutralMode(NeutralMode.Brake);
+			_rightMaster.setNeutralMode(NeutralMode.Brake);
+			_leftSlave.setNeutralMode(NeutralMode.Brake);
+			_rightSlave.setNeutralMode(NeutralMode.Brake);
+		}
+		else
+		{
+			_leftMaster.setNeutralMode(NeutralMode.Coast);
+			_rightMaster.setNeutralMode(NeutralMode.Coast);
+			_leftSlave.setNeutralMode(NeutralMode.Coast);
+			_rightSlave.setNeutralMode(NeutralMode.Coast);
 
+		}
 
-		Shoot = _xboxOp.getBumper(Hand.kRight);
+		if(_xboxDriver.getTriggerAxis(Hand.kRight)<0.8)
+		{
+			forward = forward *0.6;
+			_xboxOp.setRumble(RumbleType.kLeftRumble, 0);
+			_xboxOp.setRumble(RumbleType.kRightRumble, 0);
+		}
+		else
+		{
+			_xboxOp.setRumble(RumbleType.kLeftRumble, 1.0);
+			_xboxOp.setRumble(RumbleType.kRightRumble, 1.0);
+		}
+
+		if(_xboxOp.getBumper(Hand.kRight))
+		{
+			Shoot = true;
+		}
+		else
+		{
+			if(Aim)
+			{
+				Shoot = true;
+			}
+			else
+			{
+				Shoot = false;
+			}
+		}
+
 		if(_xboxOp.getTriggerAxis(Hand.kLeft)>0.8)
 		{
 			Aim = true;
@@ -911,45 +1010,69 @@ public class Robot extends TimedRobot
 
 
 		}
+
+		if(_xboxOp.getTriggerAxis(Hand.kRight)<0.8)
+		{
+			Fire = false;
+		}
+		else
+		{
+			Fire = true;
+		}
 	
-		//Aim = _xboxOp.getBumper(Hand.kRight);
 		ManAim = _xboxOp.getBumper(Hand.kLeft);
-		//AimGO = _xboxOp.getBumperPressed(Hand.kRight);
 		//CenterTurret = _xboxOp.getYButton();
 		transfer = _xboxOp.getY(Hand.kLeft)*-0.3;
 		dogbone =  _xboxOp.getY(Hand.kRight)*0.3;
-		if(_xboxOp.getStartButton())
-		{
-			_wheelOfFortune.set(ControlMode.PercentOutput, 0.5);
-		}
-		else
-		{
-			_wheelOfFortune.set(ControlMode.PercentOutput, 0.0);
-		}
 
 		if(_xboxOp.getXButton())
 		{
-			_rightRelease.setAngle(0);
-			_leftRelease.setAngle(180);
+			Spin = true;
+		}
+		if(Spin)
+		{
+			if (wheel > -3300)
+			{
+				_wheelOfFortune.set(ControlMode.PercentOutput, 0.65);
+			}
+			else 
+			{
+				Spin = false;
+			}
 		}
 		else
 		{
-			_rightRelease.setAngle(180);
-			_leftRelease.setAngle(0);
+			_wheelOfFortune.setSelectedSensorPosition(0);
+			_wheelOfFortune.set(ControlMode.PercentOutput, 0.0);	
+		}
+		
+
+		if(_xboxOp.getBackButton())
+		{
+			CenterTurret = true;
+		}
+		else
+		{
+			if (Hanging)
+			{
+				CenterTurret = true;
+			}
+			CenterTurret = false;
 		}
 
 		humanLoad =_xboxOp.getBButton();
 		eat = _xboxOp.getAButton();
 
+
 		if(_xboxOp.getYButton())
 		{
-			winchBrake = true; 
+			//winchBrake = true; 
 			winch = 0.70;
 			
 		}
 		else
 		{
-			winchBrake = true;
+			//winchBrake = true;
 			winch = 0;
 		}
  
@@ -986,9 +1109,11 @@ public class Robot extends TimedRobot
 	humanLoad = false;
 	eat = false;
 	Aim = false;
+	
 	Shoot= false;
 	FlapperL=false;
 	FlapperR=false;	
+	Hanging=false;
 	//.set(ControlMode.PercentOutput, 0);
 	teleopInit = true;
 
