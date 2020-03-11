@@ -49,9 +49,11 @@ public class Robot extends TimedRobot
 	private static final String kTest = "Test";
 	private static final String kSpin = "Spin";
 	private static final String kAutoCenter = "Center Shot";
+	private static final String kAutoLeft = "HOT Shot";
 	private static final String kAutoTrench = "Trench Shot";
 	private String m_autoSelected;
 	private final SendableChooser<String> m_chooser = new SendableChooser<>();
+	private final SendableChooser<Integer> s_chooser = new SendableChooser<>();
 
 	/** Hardware, either Talon could be a Victor */
 	//TalonSRX _rightMaster = new TalonSRX(1);
@@ -149,10 +151,11 @@ public class Robot extends TimedRobot
 	double gyro = 0;
 	double roll = 0;
 	double shotCurrent = 0;
-	final double kSpeed = 7255*8192/600;
+	double kSpeed = 7255*8192/600;
 	double gyroF = 0;
 	double speedShooter = 0;
 	double potStart = 0;
+	int speedAdd = 0;
 	int Timer = 0;
 	int autonState = 0;
 	int wheel = 0;
@@ -261,6 +264,7 @@ public class Robot extends TimedRobot
 	 SmartDashboard.putNumber("Gyro Fused", gyroF);
 	 SmartDashboard.putNumber("Drive", forward);
 	 SmartDashboard.putData("Auto choices", m_chooser);
+	 SmartDashboard.putData("Shot Speed", s_chooser);
 	 SmartDashboard.putBoolean("AIM", Aim);
 	 SmartDashboard.putBoolean("spin", Spin);
 	 SmartDashboard.putBoolean("fire", Fire);
@@ -285,8 +289,14 @@ public class Robot extends TimedRobot
 	 m_chooser.addOption("My Auto", kCustomAuto);
 	 m_chooser.addOption("Test", kTest);
 	 m_chooser.addOption("Spin", kSpin);
+	 m_chooser.addOption("Hot Shot", kAutoLeft);
 	 m_chooser.addOption("Center Shot", kAutoCenter);
 	 m_chooser.addOption("Trench Shot", kAutoTrench);
+	 s_chooser.setDefaultOption("7255", 0);
+	 s_chooser.addOption("7755", 500);
+	 s_chooser.addOption("8255", 1000);
+	 s_chooser.addOption("8755", 1500);
+	 s_chooser.addOption("9255", 2000);
 
 	 gyro = ahrs.getYaw();
 	 gyroF = ahrs.getFusedHeading();
@@ -298,6 +308,9 @@ public class Robot extends TimedRobot
 	 Potentiometer = _dogbone.getSelectedSensorPosition();
 	 shotCurrent = _shooterMaster.getSupplyCurrent();
 	 wheel = _wheelOfFortune.getSelectedSensorPosition();
+	 speedAdd = s_chooser.getSelected();
+	 kSpeed = (7255+speedAdd)*8192/600;
+
 
 	 gameData = DriverStation.getInstance().getGameSpecificMessage();
 
@@ -505,7 +518,7 @@ public class Robot extends TimedRobot
 		}
 		_turret.set(ControlMode.PercentOutput, turretAim);
 		//Shoot ball 
-		if (Fire && lockedOn && (speedShooter>7000))
+		if (Fire && lockedOn && (speedShooter>(7000*8192/600)))
 		{
 			_xboxOp.setRumble(RumbleType.kLeftRumble, 1.0);
 			_xboxOp.setRumble(RumbleType.kRightRumble, 1.0);
@@ -532,7 +545,8 @@ public class Robot extends TimedRobot
 				intake = 0.8;	
 			}
 		
-			if(Potentiometer<100) //pot
+			if(Potentiometer<50
+			) //pot
 			{
 				if(Shoot)
 				{
@@ -670,9 +684,10 @@ public class Robot extends TimedRobot
 		  	// Put custom auto code here
 		  	autoReset();
 
-		  	if(distanceDrive<2000)
+		  	if(distanceDrive<200000)
 		  	{
-				forward = 0.51;
+				forward = -0.2;
+				turn = gyro/10;
 		  	}
 		  	else
 		  	{
@@ -700,6 +715,8 @@ public class Robot extends TimedRobot
     		case START: 
 			{
 				autoReset();
+				_rightMaster.setSelectedSensorPosition(0);
+				_leftMaster.setSelectedSensorPosition(0);
 				autonState = DRIVE_BACKWARDS;
 				break;
 			}
@@ -749,7 +766,7 @@ public class Robot extends TimedRobot
 			case DRIVE_BACKWARDS2: 
 			{
 				forward = -0.4;
-				if (distanceDrive >75000)
+				if (distanceDrive >15000)
 				{
 					autonState = STOP;
 				}
@@ -768,12 +785,14 @@ public class Robot extends TimedRobot
 				break;
 			}
 		}
-		case kAutoTrench:
+		case kAutoLeft:
 			switch (autonState) 
 			{
 			case START: 
 			{
 				autoReset();
+				_rightMaster.setSelectedSensorPosition(0);
+				_leftMaster.setSelectedSensorPosition(0);
 				autonState = DRIVE_BACKWARDS;
 				break;
 			}
@@ -810,9 +829,113 @@ public class Robot extends TimedRobot
 				}	
 				break;
 			}
-
-		case DRIVE_BACKWARDS: 
+			case DRIVE_BACKWARDS:
+			{
+			forward = -0.4;
+			if (distanceDrive >5000)
+			{
+				AimGO = true;
+				autonState = SHOOT;
+			}
+			break;
+		}
+		case DRIVE_BACKWARDS2: 
 		{
+			Shoot = false;
+			humanLoad = false;
+			eat=true;
+			forward = -0.20;
+			if (distanceDrive >55000)
+			{
+				autonState = STOP;
+			}
+			break;
+		}
+		
+		case STOP: 
+		{
+			autoReset();
+			autonState = DRIVE_FORWARD;
+			AimGO = true;
+			break;
+		}
+
+		case DRIVE_FORWARD: 
+		{
+			forward = 0.55;
+			Aim = true;
+			Shoot = true;
+			if (distanceDrive < 60000)
+			{
+				Timer = 40;
+				AutoShot2 = true;
+				autonState = SHOOT;
+			}
+			eat=false;
+			break;
+		}
+
+		case FINISH: 
+		{
+			autoReset();
+			break;
+		}
+	}
+		
+		
+		
+		case kAutoTrench:
+			switch (autonState) 
+			{
+			case START: 
+			{
+				autoReset();
+				_rightMaster.setSelectedSensorPosition(0);
+				_leftMaster.setSelectedSensorPosition(0);
+				autonState = DRIVE_BACKWARDS;
+				break;
+			}
+
+			case SHOOT: 
+			{
+				forward = 0;
+				Aim = true;
+				Shoot = true;
+				FlapperL=true;
+				FlapperR=false;				
+				if (lockedOn)
+				{
+					//shoot
+					if(Timer>60)
+					{
+						humanLoad=true;
+					}
+					if(Timer>100)
+					{
+						FlapperL=false;
+						FlapperR=true;	
+					}
+
+				Timer++;
+				}
+
+				if (Timer >= 160)
+				{
+					Aim = false; 
+					if(AutoShot2) 
+					{
+						autonState = FINISH;
+					}
+					else
+					{
+						_dogbone.setSelectedSensorPosition(0);
+						autonState = DRIVE_BACKWARDS2;
+					}
+				}	
+				break;
+			}
+			case DRIVE_BACKWARDS:
+			{
 			forward = -0.4;
 			if (distanceDrive >5000)
 			{
@@ -1046,18 +1169,25 @@ public class Robot extends TimedRobot
 			_wheelOfFortune.set(ControlMode.PercentOutput, 0.0);	
 		}
 		
-
 		if(_xboxOp.getBackButton())
+		{
+			_dogbone.setSelectedSensorPosition(0);
+		}
+
+		if(270>_xboxOp.getPOV()&&_xboxOp.getPOV()>90)
 		{
 			CenterTurret = true;
 		}
-		else
-		{
+		else 
+		{		
 			if (Hanging)
 			{
 				CenterTurret = true;
 			}
-			CenterTurret = false;
+			else
+			{
+				CenterTurret = false;
+			}
 		}
 
 		humanLoad =_xboxOp.getBButton();
@@ -1109,6 +1239,8 @@ public class Robot extends TimedRobot
 	humanLoad = false;
 	eat = false;
 	Aim = false;
+
+
 	
 	Shoot= false;
 	FlapperL=false;
