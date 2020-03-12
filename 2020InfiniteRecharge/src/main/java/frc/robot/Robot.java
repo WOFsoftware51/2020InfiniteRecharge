@@ -20,6 +20,7 @@ import com.revrobotics.ColorSensorV3;
 
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -92,6 +93,7 @@ public class Robot extends TimedRobot
 
 	Spark Blinkin = new Spark(0);
 	AHRS ahrs = new AHRS(SerialPort.Port.kMXP);
+	DigitalInput proxSensor = new DigitalInput(0);
 
 	Boolean Aim = false;
 	Boolean Shoot = false;
@@ -117,6 +119,7 @@ public class Robot extends TimedRobot
 	Boolean AutoShot2 = false;
 	Boolean Fire = false;
 	Boolean Spin = false;
+	Boolean ballSensor = false;
 
 	//Joystick _gamepad = new Joystick(1);
 	XboxController _xboxDriver = new XboxController(0);
@@ -285,6 +288,7 @@ public class Robot extends TimedRobot
 	 SmartDashboard.putNumber("Shooter Current", shotCurrent);
 	// SmartDashboard.putString("Color", colString);
 	SmartDashboard.putNumber("Wheel Distance", wheel);
+	SmartDashboard.putBoolean("Ball Proximity", ballSensor);
 	 m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
 	 m_chooser.addOption("My Auto", kCustomAuto);
 	 m_chooser.addOption("Test", kTest);
@@ -310,6 +314,7 @@ public class Robot extends TimedRobot
 	 wheel = _wheelOfFortune.getSelectedSensorPosition();
 	 speedAdd = s_chooser.getSelected();
 	 kSpeed = (7255+speedAdd)*8192/600;
+	 ballSensor = proxSensor.get();
 
 
 	 gameData = DriverStation.getInstance().getGameSpecificMessage();
@@ -393,6 +398,7 @@ public class Robot extends TimedRobot
 			}
 		
 			NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
+			NetworkTableInstance.getDefault().getTable("limelight").getEntry("camMode").setNumber(0);
 		}
 
 		else 
@@ -424,6 +430,7 @@ public class Robot extends TimedRobot
 			  }
 	
 			NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+			NetworkTableInstance.getDefault().getTable("limelight").getEntry("camMode").setNumber(1);
 		}
 
 		tv = NetworkTableInstance.getDefault().getTable("limelight").getEntry("tv").getDouble(0);
@@ -432,6 +439,7 @@ public class Robot extends TimedRobot
 		if(Aim)
 		{
 			Shoot = true;
+			Hanging = false;
 			if(tv==1)
 			{
 				//turretAim =tx;
@@ -461,6 +469,7 @@ public class Robot extends TimedRobot
 		else if(ManAim)
 		{
 			turretAim =_xboxOp.getX(Hand.kLeft)*-0.3;
+			Hanging = false;
 		}
 		else if(CenterTurret)
 		{
@@ -545,8 +554,7 @@ public class Robot extends TimedRobot
 				intake = 0.8;	
 			}
 		
-			if(Potentiometer<50
-			) //pot
+			if(Potentiometer<50) //pot
 			{
 				if(Shoot)
 				{
@@ -565,22 +573,22 @@ public class Robot extends TimedRobot
 			{
 				transfer = 0;
 			}
-			if(_dogbone.isFwdLimitSwitchClosed()==1 && count < 1)
+			if(ballSensor && count < 1)
 			{
 				Pulse = true;
 				count++;
 				if(Shoot==false)
 				{
-					dogbone = -0.3;
+					dogbone = -0.1;
 				}
 			}
 			else if(Shoot)
 			{
 				dogbone = 1;
 			}
-			else if(_dogbone.isFwdLimitSwitchClosed()==1)
+			else if(ballSensor)
 			{
-				dogbone = 0.5;
+				dogbone = 0;
 			}
 			else
 			{
